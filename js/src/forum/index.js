@@ -10,7 +10,10 @@ import PostControls from 'flarum/forum/utils/PostControls';
 import Composer from 'flarum/forum/components/Composer';
 import PostStream from 'flarum/forum/components/PostStream';
 import DiscussionListItem from 'flarum/forum/components/DiscussionListItem';
+import DiscussionListState from 'flarum/forum/states/DiscussionListState';
 import Stream from 'flarum/common/utils/Stream';
+import { withFirstPostInclude } from './utils/listParams';
+import { withCatalogSorts } from './utils/discussionSortMap';
 import { readSettings } from '../common/settings';
 import { createVoteAdapter } from '../common/voteAdapter';
 import { getDepth, isHidden, isOriginalPost, getReplyTarget, getParentId, isDerivedParent, planSiblingFolding } from './utils/threadDepths';
@@ -30,7 +33,25 @@ app.initializers.add('mtareq-nested-replies', () => {
 
   if (!settings.enabled) return;
 
+  // Scope the list-row vote gutter / negative margin / rail styles to this
+  // class so the 34px column disappears when votes are turned off.
+  document.documentElement.classList.toggle('NestedRepliesShowVotes', settings.showVotes);
+
   const votes = createVoteAdapter(app);
+
+  // The list rail needs the discussion's original post (and its votes/userVote).
+  // Requested client-side so it works on both Flarum 1.8 and 2.0.
+  override(DiscussionListState.prototype, 'requestParams', function (original) {
+    if (!settings.showVotes) return original();
+    return withFirstPostInclude(original());
+  });
+
+  // The list dropdown is built from this map's keys. We swap core's `top`
+  // (replies) for our `replies` key and add `votes`; see discussionSortMap.js.
+  override(DiscussionListState.prototype, 'sortMap', function (original) {
+    return withCatalogSorts(original());
+  });
+
   const collapsed = new Set();
   const expandedGroups = new Set();
   const mounted = new Set();
@@ -190,6 +211,31 @@ app.initializers.add('mtareq-nested-replies', () => {
       }
 
       return original.call(this);
+    });
+  }
+
+  // Route the discussion's own destructive actions through the custom modal.
+  // This covers both the list rows and the discussion's menu on the details
+  // page (native confirm() is suppressed around core's original action).
+  if (DiscussionControls) {
+    override(DiscussionControls, 'hideAction', function (original) {
+      app.modal.show(DeleteConfirmModal, {
+        title: app.translator.trans('mtareq-nested-replies.forum.delete_discussion_title'),
+        message: app.translator.trans('mtareq-nested-replies.forum.hide_discussion_confirmation'),
+        confirmLabel: app.translator.trans('core.forum.discussion_controls.delete_button'),
+        // Core's discussion hide() performs no native confirm(), so just call
+        // the original action.
+        onconfirm: () => original(),
+      });
+    });
+
+    override(DiscussionControls, 'deleteAction', function (original) {
+      app.modal.show(DeleteConfirmModal, {
+        title: app.translator.trans('mtareq-nested-replies.forum.delete_discussion_forever_title'),
+        message: app.translator.trans('core.forum.discussion_controls.delete_confirmation'),
+        confirmLabel: app.translator.trans('core.forum.discussion_controls.delete_forever_button'),
+        onconfirm: () => runWithoutNativeConfirm(() => original()),
+      });
     });
   }
 
@@ -382,6 +428,31 @@ app.initializers.add('mtareq-nested-replies', () => {
       return 1;
     });
   }
+
+  // Vote rail on the discussion list. It votes the discussion's first post — the
+  // same model the details page votes — so the two views stay in sync.
+  extend(DiscussionListItem.prototype, 'contentItems', function (items) {
+    if (!settings.showVotes) return;
+
+    const discussion = this.attrs.discussion;
+    const firstPost = discussion && typeof discussion.firstPost === 'function' ? discussion.firstPost() : null;
+
+    if (!firstPost) return;
+
+    items.add('nestedRepliesVote', m(VoteRail, { post: firstPost, adapter: votes }), 110);
+  });
+
+  // DiscussionListItem caches its subtree and only rebuilds on read-state
+  // changes, so key it on the first post's vote too. Without this a vote
+  // updates the model but the row keeps the old score until a full re-render.
+  extend(DiscussionListItem.prototype, 'oninit', function () {
+    this.subtree.check(() => {
+      const discussion = this.attrs.discussion;
+      const firstPost = discussion && typeof discussion.firstPost === 'function' ? discussion.firstPost() : null;
+
+      return firstPost ? `${firstPost.attribute('votes')}:${firstPost.attribute('userVote')}` : '';
+    });
+  });
 
   function isLikedByMe(post) {
     if (!app.session.user || typeof post.likes !== 'function') return false;

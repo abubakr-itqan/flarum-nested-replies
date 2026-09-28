@@ -20,6 +20,7 @@ mtareq-nested-replies:
     expand: Expand replies
     upvote: Upvote
     downvote: Downvote
+    vote_own_post: You can't vote on your own post
     reply_to: "Reply to {username}"
     more_replies: "{count} more replies"
     show_more_replies: Show more replies
@@ -48,3 +49,12 @@ mtareq-nested-replies:
     reply_form_discard_confirm: Discard and continue
     delete_post_title: Delete post
     delete_post_forever_title: Delete forever
+    delete_discussion_title: Delete discussion
+    delete_discussion_forever_title: Delete discussion forever
+    hide_discussion_confirmation: Hide this discussion?
+
+core:
+  forum:
+    index_sort:
+      votes_button: Top voted
+      replies_button: Most replies

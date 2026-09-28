@@ -20,6 +20,7 @@ mtareq-nested-replies:
     expand: توسيع الردود
     upvote: تصويت إيجابي
     downvote: تصويت سلبي
+    vote_own_post: لا يمكنك التصويت على منشورك
     reply_to: "الرد على {username}"
     more_replies: "{count} ردود أخرى"
     show_more_replies: إظهار المزيد من الردود
@@ -47,3 +48,12 @@ mtareq-nested-replies:
     reply_form_discard_confirm: تجاهل والمتابعة
     delete_post_title: حذف المشاركة
     delete_post_forever_title: حذف نهائي
+    delete_discussion_title: حذف الموضوع
+    delete_discussion_forever_title: حذف الموضوع نهائيًا
+    hide_discussion_confirmation: إخفاء هذا الموضوع؟
+
+core:
+  forum:
+    index_sort:
+      votes_button: الأعلى تصويتًا
+      replies_button: الأكثر ردودًا
