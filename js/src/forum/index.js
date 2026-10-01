@@ -125,7 +125,8 @@ app.initializers.add('mtareq-nested-replies', () => {
       if (!op) return originalReplyAction.apply(this, args);
 
       openInlineReply(op);
-      return undefined;
+      // Core's ReplyPlaceholder chains .catch() on the result.
+      return Promise.resolve();
     };
   }
 
@@ -765,11 +766,13 @@ app.initializers.add('mtareq-nested-replies', () => {
       // renders, so draw it ourselves unless the admin hides it: under the
       // original post and, on threads with replies, again after the last one.
       // Same condition as core's PostStream: guests get the log-in prompt,
-      // locked threads get nothing.
+      // locked threads get nothing. Hidden while an inline reply form is open:
+      // clicking a box would discard the draft, and in composer mode core turns
+      // the box into a second draft preview.
       const discussion = this.discussion || (this.stream && this.stream.discussion);
       const replyBox = (key) =>
-        !settings.hideMainReplyBox && discussion && (!app.session.user || discussion.canReply())
-          ? m('div.PostStream-item', { key, 'data-index': allPosts.length }, m(ReplyPlaceholder, { discussion }))
+        !settings.hideMainReplyBox && !inlineReply && discussion && (!app.session.user || discussion.canReply())
+          ? m('div.PostStream-item', key === 'reply' ? { key, 'data-index': allPosts.length } : { key }, m(ReplyPlaceholder, { discussion }))
           : null;
 
       const topBox = replyBox('replyTop');
@@ -804,7 +807,8 @@ app.initializers.add('mtareq-nested-replies', () => {
     const op = children[opIndex];
     const rest = children.slice(opIndex + 1);
     const replies = rest.filter(isPostItem);
-    const tail = rest.filter((child) => !isPostItem(child));
+    // Drop core's own reply box (key 'reply') when the admin hides it.
+    const tail = rest.filter((child) => !isPostItem(child) && !(settings.hideMainReplyBox && child && child.key === 'reply'));
 
     const replyPosts = replies.map((child) => lookup(child.attrs['data-id'])).filter(Boolean);
 
